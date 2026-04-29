@@ -1,6 +1,7 @@
 /*
- * hybridhud.ino — 基于仓库无旋转版本 + 蓝牙模块
- * 无 sw_rotate, 无 lv_disp_set_rotation, USB朝左自然方向
+ * OBD_scanner.ino — 精简版：仅保留 Bluetooth 扫描界面
+ * 删除: general、race、setting 界面及对应 manager
+ * 保留: bluetooth_manager (扫描核心) + 单屏 UI
  */
 
 #include <lvgl.h>
@@ -10,10 +11,7 @@
 
 #include "src/gui_guider.h"
 #include "src/custom.h"
-#include "setting_manager.h"
 #include "bluetooth_manager.h"
-#include "general_manager.h"
-#include "race_manager.h"
 #include "TouchDrvCSTXXX.hpp"
 #include <SensorPCF85063.hpp>
 #include <SensorQMI8658.hpp>
@@ -35,14 +33,11 @@
 #define TP_RESET    40
 
 // ---- Gesture thresholds ----
-#define SETTING_OPEN_Y_THRESHOLD     80
-#define SETTING_CLOSE_Y_THRESHOLD   420
+// (已删除 general/race/setting 界面，手势不需要)
 
 // ---- Animation & timing ----
 #define ANIM_DURATION_MS            20
 #define SWITCH_LOCK_TIME            20
-#define TIME_UPDATE_INTERVAL_MS     1000
-#define TEMP_UPDATE_INTERVAL_MS     3000
 
 // ---- Global hardware objects ----
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(
@@ -60,21 +55,17 @@ static lv_disp_draw_buf_t draw_buf;
 static lv_color_t *buf1 = NULL;
 static lv_color_t *buf2 = NULL;
 
-// ---- Internal screen IDs (for state tracking) ----
+// ---- Internal screen IDs ----
 typedef enum {
-    SCREEN_GENERAL = 0,
-    SCREEN_RACE,
-    SCREEN_SETTING,
-    SCREEN_BLUETOOTH
+    SCREEN_BLUETOOTH = 0
 } screen_id_t;
 
-static screen_id_t current_screen = SCREEN_GENERAL;
-static screen_id_t prev_main_screen = SCREEN_GENERAL;
+static screen_id_t current_screen = SCREEN_BLUETOOTH;
 static bool is_switching = false;
 static uint32_t switch_unlock_ms = 0;
 
 // ---- Periodic update timing (bluetooth only) ----
-// general_manager 和 race_manager 各自维护自己的计时器
+// bluetooth_manager 维护自己的计时器
 
 // ---- Touch state (updated by my_touchpad_read) ----
 static volatile int16_t g_touch_x = 0, g_touch_y = 0;
@@ -132,64 +123,18 @@ static void my_touchpad_read(lv_indev_drv_t *indev, lv_indev_data_t *data)
 // ============================================================
 static void app_switch_screen(app_screen_t target, bool animate)
 {
+    (void)animate; // 单屏不需要动画方向
     if (is_switching) return;
-
-    /* Theme 按钮：在 general 和 race 之间切换 */
-    if (target == APP_SCREEN_TOGGLE) {
-        target = (prev_main_screen == SCREEN_RACE) ? APP_SCREEN_GENERAL : APP_SCREEN_RACE;
-    }
-
-    /* 离开蓝牙页面时清理 */
-    if (current_screen == SCREEN_BLUETOOTH) {
-        bluetooth_manager_exit();
-    }
-
-    lv_obj_t *target_obj = NULL;
-    switch (target) {
-        case APP_SCREEN_GENERAL:   target_obj = guider_ui.general;   break;
-        case APP_SCREEN_RACE:      target_obj = guider_ui.race;      break;
-        case APP_SCREEN_SETTING:   target_obj = guider_ui.setting;   break;
-        case APP_SCREEN_BLUETOOTH: target_obj = guider_ui.bluetooth; break;
-    }
-    if (!target_obj || target_obj == lv_scr_act()) return;
-
-    if (animate && target == APP_SCREEN_SETTING) {
-        lv_scr_load_anim(target_obj, LV_SCR_LOAD_ANIM_MOVE_BOTTOM, ANIM_DURATION_MS, 0, false);
-    } else {
-        lv_scr_load(target_obj);
-    }
+    if (target != APP_SCREEN_BLUETOOTH) return; // 只支持 bluetooth
+    if (lv_scr_act() == guider_ui.bluetooth) return;
 
     is_switching = true;
+    lv_scr_load(guider_ui.bluetooth);
+    bluetooth_manager_enter();
+    current_screen = SCREEN_BLUETOOTH;
     switch_unlock_ms = millis() + ANIM_DURATION_MS + SWITCH_LOCK_TIME;
-
-    if (target == APP_SCREEN_GENERAL) {
-        current_screen = SCREEN_GENERAL;
-        prev_main_screen = SCREEN_GENERAL;
-    } else if (target == APP_SCREEN_RACE) {
-        current_screen = SCREEN_RACE;
-        prev_main_screen = SCREEN_RACE;
-    } else if (target == APP_SCREEN_BLUETOOTH) {
-        current_screen = SCREEN_BLUETOOTH;
-    } else {
-        current_screen = SCREEN_SETTING;
-    }
-
-    /* 子页面生命周期 */
-    if (target == APP_SCREEN_BLUETOOTH) {
-        bluetooth_manager_enter();
-    } else if (target == APP_SCREEN_GENERAL) {
-        general_manager_enter();
-        race_manager_exit();
-    } else if (target == APP_SCREEN_RACE) {
-        race_manager_enter();
-        general_manager_exit();
-    }
-
-    if (target != APP_SCREEN_SETTING && target != APP_SCREEN_BLUETOOTH) {
-        prefs.begin("hybridhud", false);
-        prefs.putUChar("last_screen", (uint8_t)current_screen);
-        prefs.end();
-    }
+    is_switching = false;
+}
 }
 
 // ============================================================
@@ -220,7 +165,7 @@ static void process_gesture(int16_t dx, int16_t dy, int16_t start_y)
 }
 
 // ============================================================
-// Data update: 已移至 general_manager / race_manager
+// 蓝牙扫描核心
 // ============================================================
 
 // ============================================================
@@ -301,54 +246,19 @@ void setup()
     init_scr_del_flag(&guider_ui);
 
     // Build all screens
-    Serial.println("[DBG] setup_scr_general...");
-    setup_scr_general(&guider_ui);
-    Serial.println("[DBG] setup_scr_race...");
-    setup_scr_race(&guider_ui);
-    Serial.println("[DBG] setup_scr_setting...");
-    setup_scr_setting(&guider_ui);
     Serial.println("[DBG] setup_scr_bluetooth...");
     setup_scr_bluetooth(&guider_ui);
     Serial.println("[DBG] All screens built OK");
 
-    // Disable scrolling on main screens
-    lv_obj_clear_flag(guider_ui.general, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN);
-    lv_obj_clear_flag(guider_ui.race,    LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_CHAIN);
-    Serial.println("[DBG] Scroll flags cleared");
-
     // Init managers
-    Serial.println("[DBG] Init setting_manager...");
-    setting_manager_init(&guider_ui);
-    setting_manager_set_switch_cb(app_switch_screen);
-
     Serial.println("[DBG] Init bluetooth_manager...");
     bluetooth_manager_init(&guider_ui);
     bluetooth_manager_set_switch_cb(app_switch_screen);
 
-    Serial.println("[DBG] Init general_manager...");
-    general_manager_init(&guider_ui);
-
-    Serial.println("[DBG] Init race_manager...");
-    race_manager_init(&guider_ui);
-
-    // Restore last main screen from NVS
-    Serial.println("[DBG] Load NVS...");
-    prefs.begin("hybridhud", true);
-    uint8_t last = prefs.getUChar("last_screen", SCREEN_GENERAL);
-    prefs.end();
-
     Serial.println("[DBG] Load initial screen...");
-    if (last == SCREEN_RACE) {
-        current_screen = SCREEN_RACE;
-        prev_main_screen = SCREEN_RACE;
-        lv_scr_load(guider_ui.race);
-        race_manager_enter();
-    } else {
-        current_screen = SCREEN_GENERAL;
-        prev_main_screen = SCREEN_GENERAL;
-        lv_scr_load(guider_ui.general);
-        general_manager_enter();
-    }
+    current_screen = SCREEN_BLUETOOTH;
+    lv_scr_load(guider_ui.bluetooth);
+    bluetooth_manager_enter();
 
     Serial.println("[HybridHUD] Ready");
 }
@@ -369,14 +279,7 @@ void loop()
     lv_tick_inc(5);
     lv_timer_handler();
 
-    // 根据当前页面选择性调用 manager update（提升效率）
-    if (current_screen == SCREEN_GENERAL) {
-        general_manager_update(now);
-    } else if (current_screen == SCREEN_RACE) {
-        race_manager_update(now);
-    }
-
-    // Bluetooth scan result refresh
+    // 蓝牙扫描核心
     bluetooth_manager_update();
 
     // Gesture detection using global touch coordinates

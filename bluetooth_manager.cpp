@@ -7,7 +7,6 @@
  *  移除: 0110 MAF(NO DATA), HYB(7B1无效), 015C/015D(NO DATA)
  */
 #include "bluetooth_manager.h"
-#include "general_manager.h"
 #include <Arduino.h>
 #include <Preferences.h>
 #include <BLEDevice.h>
@@ -672,15 +671,7 @@ static void obd_poll(uint32_t now){
 
     if(s_obd_rx_ready&&s_obd_rx_buf[0]){
         if(parse_pid_response(s_obd_rx_buf,s_pid_idx)){
-            // PID解析成功，更新UI
-            general_manager_set_obd_data(s_cached_rpm, s_cached_speed);
-            // Oil 显示真实机油温度(013C)，如果机油温度有效则优先用它
-            if (s_cached_oil >= -40) {
-                general_manager_set_oil(s_cached_oil);
-            } else if (s_cached_coolant >= -40) {
-                // 退而求其次用冷却液温度
-                general_manager_set_oil(s_cached_coolant);
-            }
+            // PID解析成功，数据已缓存
         }else{
             char t[256];strncpy(t,s_obd_rx_buf,sizeof(t)-1);t[sizeof(t)-1]=0;
             for(int i=0;t[i];i++)if(t[i]=='\r'||t[i]=='\n')t[i]=' ';
