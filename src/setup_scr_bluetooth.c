@@ -51,29 +51,6 @@ void setup_scr_bluetooth(lv_ui *ui)
     lv_obj_set_style_pad_left(ui->bluetooth_bt_label_title, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_width(ui->bluetooth_bt_label_title, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
 
-    //Write codes bluetooth_btn_back
-    ui->bluetooth_btn_back = lv_btn_create(ui->bluetooth);
-    ui->bluetooth_btn_back_label = lv_label_create(ui->bluetooth_btn_back);
-    lv_label_set_text(ui->bluetooth_btn_back_label, "Back");
-    lv_label_set_long_mode(ui->bluetooth_btn_back_label, LV_LABEL_LONG_WRAP);
-    lv_obj_align(ui->bluetooth_btn_back_label, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_pad_all(ui->bluetooth_btn_back, 0, LV_STATE_DEFAULT);
-    lv_obj_set_width(ui->bluetooth_btn_back_label, LV_PCT(100));
-    lv_obj_set_pos(ui->bluetooth_btn_back, 183, 379);
-    lv_obj_set_size(ui->bluetooth_btn_back, 100, 50);
-
-    //Write style for bluetooth_btn_back, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.
-    lv_obj_set_style_bg_opa(ui->bluetooth_btn_back, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui->bluetooth_btn_back, lv_color_hex(0x2195f6), LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_grad_dir(ui->bluetooth_btn_back, LV_GRAD_DIR_NONE, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui->bluetooth_btn_back, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_radius(ui->bluetooth_btn_back, 50, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_shadow_width(ui->bluetooth_btn_back, 0, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_color(ui->bluetooth_btn_back, lv_color_hex(0xffffff), LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_font(ui->bluetooth_btn_back, &lv_font_montserratMedium_16, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_opa(ui->bluetooth_btn_back, 255, LV_PART_MAIN|LV_STATE_DEFAULT);
-    lv_obj_set_style_text_align(ui->bluetooth_btn_back, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN|LV_STATE_DEFAULT);
-
     //Write codes bluetooth_bt_sw_enable
     ui->bluetooth_bt_sw_enable = lv_switch_create(ui->bluetooth);
     lv_obj_set_pos(ui->bluetooth_bt_sw_enable, 122, 86);
@@ -103,8 +80,8 @@ void setup_scr_bluetooth(lv_ui *ui)
     //Write codes bluetooth_bt_list_devices
     ui->bluetooth_bt_list_devices = lv_list_create(ui->bluetooth);
     ui->bluetooth_bt_list_devices_item0 = lv_list_add_btn(ui->bluetooth_bt_list_devices, LV_SYMBOL_BLUETOOTH, "list");
-    lv_obj_set_pos(ui->bluetooth_bt_list_devices, 75, 148);
-    lv_obj_set_size(ui->bluetooth_bt_list_devices, 329, 210);
+    lv_obj_set_pos(ui->bluetooth_bt_list_devices, 83, 148);
+    lv_obj_set_size(ui->bluetooth_bt_list_devices, 300, 260);
     lv_obj_set_scrollbar_mode(ui->bluetooth_bt_list_devices, LV_SCROLLBAR_MODE_OFF);
 
     //Write style state: LV_STATE_DEFAULT for &style_bluetooth_bt_list_devices_main_main_default
@@ -204,7 +181,7 @@ void setup_scr_bluetooth(lv_ui *ui)
     lv_arc_set_rotation(ui->bluetooth_arc_1, 90);
     lv_obj_set_style_arc_rounded(ui->bluetooth_arc_1, 0,  LV_PART_INDICATOR|LV_STATE_DEFAULT);
     lv_obj_set_style_arc_rounded(ui->bluetooth_arc_1, 0, LV_STATE_DEFAULT);
-    lv_obj_set_pos(ui->bluetooth_arc_1, 0, 0);
+    lv_obj_set_pos(ui->bluetooth_arc_1, -2, 1);
     lv_obj_set_size(ui->bluetooth_arc_1, 460, 460);
 
     //Write style for bluetooth_arc_1, Part: LV_PART_MAIN, State: LV_STATE_DEFAULT.

@@ -21,8 +21,6 @@ typedef struct
 	lv_obj_t *bluetooth;
 	bool bluetooth_del;
 	lv_obj_t *bluetooth_bt_label_title;
-	lv_obj_t *bluetooth_btn_back;
-	lv_obj_t *bluetooth_btn_back_label;
 	lv_obj_t *bluetooth_bt_sw_enable;
 	lv_obj_t *bluetooth_bt_list_devices;
 	lv_obj_t *bluetooth_bt_list_devices_item0;
@@ -55,8 +53,8 @@ extern lv_ui guider_ui;
 void setup_scr_bluetooth(lv_ui *ui);
 
 LV_FONT_DECLARE(lv_font_montserratMedium_36)
-LV_FONT_DECLARE(lv_font_montserratMedium_16)
 LV_FONT_DECLARE(lv_font_montserratMedium_12)
+LV_FONT_DECLARE(lv_font_montserratMedium_16)
 
 
 #ifdef __cplusplus
