@@ -32,9 +32,6 @@
 #define TP_INT      11
 #define TP_RESET    40
 
-// ---- Gesture thresholds ----
-// (已删除 general/race/setting 界面，手势不需要)
-
 // ---- Animation & timing ----
 #define ANIM_DURATION_MS            20
 #define SWITCH_LOCK_TIME            20
@@ -55,6 +52,10 @@ static lv_disp_draw_buf_t draw_buf;
 static lv_color_t *buf1 = NULL;
 static lv_color_t *buf2 = NULL;
 
+// ---- Touch state (updated by my_touchpad_read) ----
+static volatile int16_t g_touch_x = 0, g_touch_y = 0;
+static volatile uint8_t g_touch_pressed = 0;
+
 // ---- Internal screen IDs ----
 typedef enum {
     SCREEN_BLUETOOTH = 0
@@ -63,21 +64,6 @@ typedef enum {
 static screen_id_t current_screen = SCREEN_BLUETOOTH;
 static bool is_switching = false;
 static uint32_t switch_unlock_ms = 0;
-
-// ---- Periodic update timing (bluetooth only) ----
-// bluetooth_manager 维护自己的计时器
-
-// ---- Touch state (updated by my_touchpad_read) ----
-static volatile int16_t g_touch_x = 0, g_touch_y = 0;
-static volatile uint8_t g_touch_pressed = 0;
-
-// ---- Gesture state ----
-typedef enum {
-    GESTURE_IDLE = 0,
-    GESTURE_ACTIVE
-} gesture_state_t;
-static gesture_state_t gs_state = GESTURE_IDLE;
-static int16_t gs_sx, gs_sy, gs_ex, gs_ey;
 
 // ---- NVS preferences ----
 static Preferences prefs;
@@ -110,7 +96,7 @@ static void my_touchpad_read(lv_indev_drv_t *indev, lv_indev_data_t *data)
         g_touch_y = ty[0];
         g_touch_pressed = 1;
         data->point.x = tx[0];
-        data->point.y = ty[0];
+        data->point.y = tx[0];
         data->state = LV_INDEV_STATE_PRESSED;
     } else {
         g_touch_pressed = 0;
@@ -119,7 +105,7 @@ static void my_touchpad_read(lv_indev_drv_t *indev, lv_indev_data_t *data)
 }
 
 // ============================================================
-// Screen switching
+// Screen switching (单屏模式，仅 bluetooth)
 // ============================================================
 static void app_switch_screen(app_screen_t target, bool animate)
 {
@@ -128,45 +114,13 @@ static void app_switch_screen(app_screen_t target, bool animate)
     if (target != APP_SCREEN_BLUETOOTH) return; // 只支持 bluetooth
     if (lv_scr_act() == guider_ui.bluetooth) return;
 
-    is_switching = true;
+    bluetooth_manager_exit();
     lv_scr_load(guider_ui.bluetooth);
     bluetooth_manager_enter();
-    current_screen = SCREEN_BLUETOOTH;
+    is_switching = true;
     switch_unlock_ms = millis() + ANIM_DURATION_MS + SWITCH_LOCK_TIME;
-    is_switching = false;
+    current_screen = SCREEN_BLUETOOTH;
 }
-}
-
-// ============================================================
-// Gesture processing (pure physical coordinates)
-// ============================================================
-static void process_gesture(int16_t dx, int16_t dy, int16_t start_y)
-{
-    if (is_switching) return;
-    if (current_screen == SCREEN_BLUETOOTH) return;  /* 蓝牙页面禁用滑动手势 */
-
-    const int16_t THRESH = 30;
-    if (abs((int)dx) < THRESH && abs((int)dy) < THRESH) return;
-    if (abs((int)dy) <= abs((int)dx)) return;
-
-    if (dy > 0) {
-        // Swipe down: open setting from top edge
-        if (current_screen != SCREEN_SETTING && start_y < SETTING_OPEN_Y_THRESHOLD) {
-            prev_main_screen = current_screen;
-            app_switch_screen(APP_SCREEN_SETTING, true);
-        }
-    } else {
-        // Swipe up: close setting from bottom edge
-        if (current_screen == SCREEN_SETTING && start_y > SETTING_CLOSE_Y_THRESHOLD) {
-            app_switch_screen(
-                (prev_main_screen == SCREEN_RACE) ? APP_SCREEN_RACE : APP_SCREEN_GENERAL, false);
-        }
-    }
-}
-
-// ============================================================
-// 蓝牙扫描核心
-// ============================================================
 
 // ============================================================
 // Setup
@@ -175,7 +129,7 @@ void setup()
 {
     Serial.begin(115200);
     delay(1500);
-    Serial.println("[HybridHUD] Booting...");
+    Serial.println("[OBDScanner] Booting...");
 
     // Touch controller reset
     pinMode(TP_RESET, OUTPUT);
@@ -214,7 +168,7 @@ void setup()
     Serial.println("[DBG] lv_init...");
     lv_init();
 
-    uint32_t buf_size = LCD_WIDTH * 40;  /* 40行缓冲区，稳定运行方案 */
+    uint32_t buf_size = LCD_WIDTH * 40;
     buf1 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA);
     buf2 = (lv_color_t *)heap_caps_malloc(buf_size * sizeof(lv_color_t), MALLOC_CAP_DMA);
     if (!buf1 || !buf2) {
@@ -223,7 +177,7 @@ void setup()
     }
     lv_disp_draw_buf_init(&draw_buf, buf1, buf2, buf_size);
 
-    // Display driver — 无旋转
+    // Display driver
     Serial.println("[DBG] Register display driver...");
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
@@ -245,22 +199,23 @@ void setup()
     Serial.println("[DBG] init_scr_del_flag...");
     init_scr_del_flag(&guider_ui);
 
-    // Build all screens
+    // Build only bluetooth screen
     Serial.println("[DBG] setup_scr_bluetooth...");
     setup_scr_bluetooth(&guider_ui);
     Serial.println("[DBG] All screens built OK");
 
-    // Init managers
+    // Init bluetooth_manager
     Serial.println("[DBG] Init bluetooth_manager...");
     bluetooth_manager_init(&guider_ui);
     bluetooth_manager_set_switch_cb(app_switch_screen);
 
+    // Load bluetooth screen directly
     Serial.println("[DBG] Load initial screen...");
     current_screen = SCREEN_BLUETOOTH;
     lv_scr_load(guider_ui.bluetooth);
     bluetooth_manager_enter();
 
-    Serial.println("[HybridHUD] Ready");
+    Serial.println("[OBDScanner] Ready");
 }
 
 // ============================================================
@@ -281,20 +236,6 @@ void loop()
 
     // 蓝牙扫描核心
     bluetooth_manager_update();
-
-    // Gesture detection using global touch coordinates
-    if (g_touch_pressed) {
-        if (gs_state == GESTURE_IDLE) {
-            gs_sx = g_touch_x; gs_sy = g_touch_y;
-            gs_ex = g_touch_x; gs_ey = g_touch_y;
-            gs_state = GESTURE_ACTIVE;
-        } else {
-            gs_ex = g_touch_x; gs_ey = g_touch_y;
-        }
-    } else if (gs_state == GESTURE_ACTIVE) {
-        process_gesture(gs_ex - gs_sx, gs_ey - gs_sy, gs_sy);
-        gs_state = GESTURE_IDLE;
-    }
 
     delay(5);
 }
